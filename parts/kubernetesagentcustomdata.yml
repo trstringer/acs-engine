@@ -112,6 +112,7 @@ write_files:
         {{{kubernetesHyperkubeSpec}}} \
           /hyperkube kubelet \
             --api-servers="https://{{{masterPrivateIp}}}:443" \
+            --experimental-nvidia-gpus 1 \
             --kubeconfig=/var/lib/kubelet/kubeconfig \
             --address=0.0.0.0 \
             --allow-privileged=true \
