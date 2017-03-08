@@ -19,7 +19,7 @@ const (
 	DefaultKubernetesClusterDomain = "cluster.local"
 	// DefaultKubernetesHyperkubeSpec is the default version used for Kubernetes setup
 	// The latest stable version can be found here: https://storage.googleapis.com/kubernetes-release/release/stable.txt
-	DefaultKubernetesHyperkubeSpec = "gcr.io/google_containers/hyperkube-amd64:v1.5.1"
+	DefaultKubernetesHyperkubeSpec = "gcr.io/google_containers/hyperkube-amd64:v1.6.0-beta.1"
 	// DefaultKubectlVersion is the version used for kubectl
 	// The latest stable version can be found here: https://storage.googleapis.com/kubernetes-release/release/stable.txt
 	DefaultKubectlVersion = "v1.5.1"
