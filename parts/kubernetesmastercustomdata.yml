@@ -1,29 +1,5 @@
 #cloud-config
 
-packages:
- - etcd
- - jq
- - traceroute
-
-disk_setup:
-  /dev/sdc:
-      table_type: gpt
-      layout: true
-      overwrite: true
-
-fs_setup:
-- label: etcd_disk
-  filesystem: ext4
-  device: /dev/sdc1
-  extra_opts:
-    - "-F"
-    - "-E"
-    - "lazy_itable_init=1,lazy_journal_init=1"
-
-mounts:
-- - /dev/sdc1
-  - /var/lib/etcddisk
-
 write_files:
 - path: "/etc/systemd/system/docker.service.d/clear_mount_propagation_flags.conf"
   permissions: "0644"
@@ -50,7 +26,7 @@ write_files:
     MaxLevelConsole=warning
     RateLimitInterval=1s
     RateLimitBurst=20000
-  
+
 - path: "/etc/docker/daemon.json"
   permissions: "0644"
   owner: "root"
@@ -71,7 +47,7 @@ write_files:
   encoding: "base64"
   owner: "root"
   content: |
-    {{WrapAsVariable "apiServerCertificate"}}
+    {{WrapAsVariable "apiserverCertificate"}}
 
 - path: "/etc/kubernetes/certs/client.crt"
   permissions: "0644"
@@ -90,7 +66,7 @@ write_files:
     - name: localcluster
       cluster:
         certificate-authority: /etc/kubernetes/certs/ca.crt
-        server: {{WrapAsVerbatim "concat('https://', variables('masterPrivateIpAddrs')[copyIndex()], ':443')"}}
+        server: https://{{WrapAsVariable "masterInternalLbIp"}}:443
     users:
     - name: client
       user:
@@ -102,90 +78,6 @@ write_files:
         user: client
       name: localclustercontext
     current-context: localclustercontext
-
-- path: /etc/kubernetes/manifests/kube-apiserver.yaml
-  permissions: "0644"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    MASTER_KUBERNETES_APISERVER_B64_GZIP_STR
-
-- path: /etc/kubernetes/manifests/kube-controller-manager.yaml
-  permissions: "0644"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    MASTER_KUBERNETES_CONTROLLER_MANAGER_B64_GZIP_STR
-
-- path: /etc/kubernetes/manifests/kube-scheduler.yaml
-  permissions: "0644"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    MASTER_KUBERNETES_SCHEDULER_B64_GZIP_STR
-
-- path: /etc/kubernetes/manifests/kube-addon-manager.yaml
-  permissions: "0644"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    MASTER_KUBERNETES_ADDON_MANAGER_B64_GZIP_STR
-
-- path: /etc/kubernetes/addons/kube-dns-service.yaml
-  permissions: "0644"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    MASTER_ADDON_KUBE_DNS_SERVICE_B64_GZIP_STR
-
-- path: /etc/kubernetes/addons/kube-dns-deployment.yaml
-  permissions: "0644"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    MASTER_ADDON_KUBE_DNS_DEPLOYMENT_B64_GZIP_STR
-
-- path: /etc/kubernetes/addons/kube-proxy-daemonset.yaml
-  permissions: "0644"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    MASTER_ADDON_KUBE_PROXY_DAEMONSET_B64_GZIP_STR
-
-- path: /etc/kubernetes/addons/kubernetes-dashboard-deployment.yaml
-  permissions: "0644"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    MASTER_ADDON_KUBERNETES_DASHBOARD_DEPLOYMENT_B64_GZIP_STR
-
-- path: /etc/kubernetes/addons/kubernetes-dashboard-service.yaml
-  permissions: "0644"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    MASTER_ADDON_KUBERNETES_DASHBOARD_SERVICE_B64_GZIP_STR
-
-- path: /etc/kubernetes/addons/kube-heapster-service.yaml
-  permissions: "0644"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    MASTER_ADDON_HEAPSTER_SERVICE_B64_GZIP_STR
-
-- path: /etc/kubernetes/addons/kube-heapster-deployment.yaml
-  permissions: "0644"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    MASTER_ADDON_HEAPSTER_DEPLOYMENT_B64_GZIP_STR
-
-- path: /etc/kubernetes/addons/default-storage-class.yaml
-  permissions: "0644"
-  encoding: gzip
-  owner: "root"
-  content: !!binary |
-    MASTER_ADDON_DEFAULT_STORAGE_CLASS_B64_GZIP_STR
 
 - path: "/etc/systemd/system/kubectl-extract.service"
   permissions: "0644"
@@ -215,12 +107,13 @@ write_files:
   owner: "root"
   content: |
     KUBELET_CLUSTER_DNS={{WrapAsVariable "kubeDnsServiceIP"}}
-    KUBELET_API_SERVERS={{WrapAsVerbatim "concat('https://', variables('masterPrivateIpAddrs')[copyIndex()], ':443')"}}
+    KUBELET_API_SERVERS=https://{{WrapAsVariable "masterInternalLbIp"}}:443
     KUBELET_IMAGE={{WrapAsVariable "kubernetesHyperkubeSpec"}}
-    KUBELET_NETWORK_PLUGIN=
+    KUBELET_NETWORK_PLUGIN=kubenet
     DOCKER_OPTS=
-    KUBELET_REGISTER_SCHEDULABLE={{WrapAsVariable "registerSchedulable"}}
-    KUBELET_NODE_LABELS=role=master,failure-domain.beta.kubernetes.io/region={{WrapAsVariable "location"}}
+    CUSTOM_CMD=/bin/true
+    KUBELET_REGISTER_SCHEDULABLE=true
+    KUBELET_NODE_LABELS=role=agent,failure-domain.beta.kubernetes.io/region={{WrapAsVariable "location"}}
     KUBELET_POD_INFRA_CONTAINER_IMAGE={{WrapAsVariable "kubernetesPodInfraContainerSpec"}}
 
 - path: "/etc/systemd/system/kubelet.service"
@@ -235,24 +128,8 @@ write_files:
   owner: "root"
   content: |
     #!/bin/bash
-    set -e
-
-    # Azure does not support two LoadBalancers(LB) sharing the same nic and backend port.
-    # As a workaround, the Internal LB(ILB) listens for apiserver traffic on port 4443 and the External LB(ELB) on port 443
-    # This IPTable rule then redirects ILB traffic to port 443 in the prerouting chain
-    iptables -t nat -A PREROUTING -p tcp --dport 4443 -j REDIRECT --to-port 443
-
-    sed -i "s|<kubernetesAddonManagerSpec>|{{WrapAsVariable "kubernetesAddonManagerSpec"}}|g" "/etc/kubernetes/manifests/kube-addon-manager.yaml"
-    sed -i "s|<kubernetesHyperkubeSpec>|{{WrapAsVariable "kubernetesHyperkubeSpec"}}|g; s|<kubeServiceCidr>|{{WrapAsVariable "kubeServiceCidr"}}|g; s|<masterEtcdClientPort>|{{WrapAsVariable "masterEtcdClientPort"}}|g; s|<masterInternalLbIp>|{{WrapAsVariable "masterInternalLbIp"}}|g" "/etc/kubernetes/manifests/kube-apiserver.yaml"
-    sed -i "s|<kubernetesHyperkubeSpec>|{{WrapAsVariable "kubernetesHyperkubeSpec"}}|g; s|<masterFqdnPrefix>|{{WrapAsVariable "masterFqdnPrefix"}}|g; s|<allocateNodeCidrs>|{{WrapAsVariable "allocateNodeCidrs"}}|g" "/etc/kubernetes/manifests/kube-controller-manager.yaml"
-    sed -i "s|<kubernetesHyperkubeSpec>|{{WrapAsVariable "kubernetesHyperkubeSpec"}}|g" "/etc/kubernetes/manifests/kube-scheduler.yaml"
-    sed -i "s|<kubernetesHyperkubeSpec>|{{WrapAsVariable "kubernetesHyperkubeSpec"}}|g" "/etc/kubernetes/addons/kube-proxy-daemonset.yaml"
-    sed -i "s|<kubernetesKubeDNSSpec>|{{WrapAsVariable "kubernetesKubeDNSSpec"}}|g; s|<kubernetesDNSMasqSpec>|{{WrapAsVariable "kubernetesDNSMasqSpec"}}|g; s|<kubernetesExecHealthzSpec>|{{WrapAsVariable "kubernetesExecHealthzSpec"}}|g" "/etc/kubernetes/addons/kube-dns-deployment.yaml"
-    sed -i "s|<kubernetesHeapsterSpec>|{{WrapAsVariable "kubernetesHeapsterSpec"}}|g; s|<kubernetesAddonResizerSpec>|{{WrapAsVariable "kubernetesAddonResizerSpec"}}|g" "/etc/kubernetes/addons/kube-heapster-deployment.yaml"
-    sed -i "s|<kubernetesDashboardSpec>|{{WrapAsVariable "kubernetesDashboardSpec"}}|g" "/etc/kubernetes/addons/kubernetes-dashboard-deployment.yaml"
-
-    echo $(curl -f --retry 5 http://169.254.169.254/metadata/v1/InstanceInfo 2>/dev/null | jq -r .FD) > /etc/kubernetes/fd
-    echo "{{WrapAsVariable "masterVMSize"}}" > /etc/kubernetes/vmsize
+    echo $(curl -f --retry 5 http://169.254.169.254/metadata/v1/InstanceInfo 2>/dev/null | sed "s/.*\"FD\":\"\([0-9]*\).*/\1/") > /etc/kubernetes/fd
+    echo "',variables('{{.Name}}VMSize'),'" > /etc/kubernetes/vmsize
 
 - path: "/opt/azure/containers/provision.sh"
   permissions: "0744"
@@ -262,15 +139,12 @@ write_files:
     {{WrapAsVariable "provisionScript"}}
 
 runcmd:
-- /bin/echo DAEMON_ARGS=--name "{{WrapAsVerbatim "variables('masterVMNames')[copyIndex()]"}}" --initial-advertise-peer-urls "{{WrapAsVerbatim "variables('masterEtcdPeerURLs')[copyIndex()]"}}" --listen-peer-urls "{{WrapAsVerbatim "variables('masterEtcdPeerURLs')[copyIndex()]"}}" --advertise-client-urls "{{WrapAsVerbatim "variables('masterEtcdClientURLs')[copyIndex()]"}}" --listen-client-urls "{{WrapAsVerbatim "concat(variables('masterEtcdClientURLs')[copyIndex()], ',http://127.0.0.1:', variables('masterEtcdClientPort'))"}}" --initial-cluster-token "k8s-etcd-cluster" --initial-cluster "{{WrapAsVerbatim "variables('masterEtcdClusterStates')[div(variables('masterCount'), 2)]"}} --data-dir "/var/lib/etcddisk"" --initial-cluster-state "new" | tee -a /etc/default/etcd
-- sudo /bin/chown -R etcd:etcd /var/lib/etcd/default
-- sudo /bin/chown -R etcd:etcd /var/lib/etcddisk
-- systemctl stop etcd
-- sudo -u etcd rm -rf /var/lib/etcd/default
-- systemctl restart etcd
-- for i in $(seq 1 20); do curl --max-time 60 http://127.0.0.1:2379/v2/machines; [ $? -eq 0 ] && break || sleep 5; done
 - apt-get update
-- apt-get install -y apt-transport-https ca-certificates
+- apt-get install -y apt-transport-https ca-certificates nfs-common
+- systemctl enable rpcbind
+- systemctl enable rpc-statd
+- systemctl start rpcbind
+- systemctl start rpc-statd
 - for i in 1 2 3 4 5; do curl --max-time 60 -fsSL https://aptdocker.azureedge.net/gpg | apt-key add -; [ $? -eq 0 ] && break || sleep 5; done
 - echo "deb {{WrapAsVariable "dockerEngineDownloadRepo"}} ubuntu-xenial main" | sudo tee /etc/apt/sources.list.d/docker.list
 - "echo \"Package: docker-engine\nPin: version {{WrapAsVariable "dockerEngineVersion"}}\nPin-Priority: 550\n\" > /etc/apt/preferences.d/docker.pref"
@@ -280,4 +154,3 @@ runcmd:
 - systemctl restart docker
 - mkdir -p /etc/kubernetes/manifests
 - usermod -aG docker {{WrapAsVariable "username"}}
-
