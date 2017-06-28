@@ -323,7 +323,7 @@ write_files:
     Type=oneshot
     StandardOutput=journal+console
     StandardError=journal+console
-    ExecStartPre=/usr/bin/curl -L -sf https://gist.githubusercontent.com/julienstroheker/ef63f85ae871906b4f3649098285b74b/raw/39d40a829257508bfd7dfa97f6bde1742635edd6/installNvidiaDCOS.sh -o /tmp/installNvidiaDCOS.sh
+    ExecStartPre=/usr/bin/curl -L -sf https://aka.ms/dcosnvidiadriver -o /tmp/installNvidiaDCOS.sh
     ExecStart=/bin/bash /tmp/installNvidiaDCOS.sh
     ExecStartPost=/usr/bin/systemctl restart dcos-mesos-slave
     ExecStartPost=/usr/bin/rm -f /var/lib/mesos/slave/meta/slaves/latest
