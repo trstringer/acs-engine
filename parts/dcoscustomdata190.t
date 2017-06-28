@@ -320,12 +320,14 @@ write_files:
     Before=dcos-docker-install.service
     Description=Install the Nvidia driver on the specific Node.
     [Service]
-    Type=oneshot
     StandardOutput=journal+console
     StandardError=journal+console
     ExecStartPre=/usr/bin/curl -L -sf https://aka.ms/dcosnvidiadriver -o /tmp/installNvidiaDCOS.sh
     ExecStart=/bin/bash /tmp/installNvidiaDCOS.sh
-    ExecStartPost=/usr/bin/systemctl restart dcos-mesos-slave
+    ExecStartPost=/usr/bin/systemctl enable nvidia-driver-install.service
     ExecStartPost=/usr/bin/rm -f /var/lib/mesos/slave/meta/slaves/latest
+    ExecStartPost=/usr/bin/systemctl restart dcos-mesos-slave
+    [Install]
+    WantedBy=multi-user.target
   path: /etc/systemd/system/nvidia-driver-install.service
   permissions: '0644'
