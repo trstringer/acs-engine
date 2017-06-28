@@ -306,7 +306,7 @@ write_files:
   content: 'ATTRIBUTES_STR'
   permissions: "0644"
   owner: "root"
-  - content: |
+- content: |
     blacklist vga16fb
     blacklist nouveau
     blacklist rivafb
@@ -326,6 +326,5 @@ write_files:
     StandardError=journal+console
     ExecStartPre=/usr/bin/curl -L -sf https://gist.githubusercontent.com/julienstroheker/ef63f85ae871906b4f3649098285b74b/raw/39d40a829257508bfd7dfa97f6bde1742635edd6/installNvidiaDCOS.sh -o /tmp/installNvidiaDCOS.sh
     ExecStart=/bin/bash /tmp/installNvidiaDCOS.sh
-  path: /etc/systemd/system/
+  path: /etc/systemd/system/nvidia-driver-install.service
   permissions: '0644'
-
