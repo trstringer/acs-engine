@@ -118,6 +118,9 @@ runcmd:
   - --no-block
   - start
   - dcos-setup.service
+- - systemctl
+  - start
+  - nvidia-driver-install.service
 write_files:
 - content: 'https://dcosio.azureedge.net/dcos/stable
 
@@ -303,3 +306,26 @@ write_files:
   content: 'ATTRIBUTES_STR'
   permissions: "0644"
   owner: "root"
+  - content: |
+    blacklist vga16fb
+    blacklist nouveau
+    blacklist rivafb
+    blacklist nvidiafb
+    blacklist rivatv
+  path: /etc/modprobe.d/nouveau.conf
+  permissions: "0644"
+  owner: "root"
+- content: |
+    [Unit]
+    After=dcos-docker-install.service
+    Wants=dcos-docker-install.service
+    Description=Install the Nvidia driver on the specific Node.
+    [Service]
+    Type=oneshot
+    StandardOutput=journal+console
+    StandardError=journal+console
+    ExecStartPre=/usr/bin/curl -L -sf https://gist.githubusercontent.com/julienstroheker/ef63f85ae871906b4f3649098285b74b/raw/39d40a829257508bfd7dfa97f6bde1742635edd6/installNvidiaDCOS.sh -o /tmp/installNvidiaDCOS.sh
+    ExecStart=/bin/bash /tmp/installNvidiaDCOS.sh
+  path: /etc/systemd/system/
+  permissions: '0644'
+
