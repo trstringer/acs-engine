@@ -306,7 +306,7 @@ write_files:
   content: 'ATTRIBUTES_STR'
   permissions: "0644"
   owner: "root"
-  - content: |
+- content: |
     blacklist vga16fb
     blacklist nouveau
     blacklist rivafb
