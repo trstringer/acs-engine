@@ -145,10 +145,12 @@ func (uc *UpgradeCluster) getClusterNodeStatus(subscriptionID uuid.UUID, resourc
 		uc.DataModel.Properties.OrchestratorProfile.OrchestratorVersion)
 
 	vmScaleSets, err := uc.Client.ListVirtualMachineScaleSets(resourceGroup)
+	uc.Logger.Infof("%d virtual machine scale set(s) found", len(*vmScaleSets.Value))
 	if err != nil {
 		return err
 	}
 	if vmScaleSets.Value != nil {
+		uc.Logger.Infof("%d virtual machine scale set(s) found", len(*vmScaleSets.Value))
 		for _, vmScaleSet := range *vmScaleSets.Value {
 			vmScaleSetVMs, err := uc.Client.ListVirtualMachineScaleSetVMs(resourceGroup, *vmScaleSet.Name)
 			if err != nil {

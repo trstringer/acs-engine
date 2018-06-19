@@ -205,6 +205,49 @@ var _ = Describe("Upgrade Kubernetes cluster tests", func() {
 		err := uc.UpgradeCluster(subID, "kubeConfig", "TestRg", cs, "12345678", []string{"agentpool1"}, TestACSEngineVersion)
 		Expect(err).To(BeNil())
 	})
+
+	It("Should return error message when failing to list VMs in a VMSS", func() {
+		cs := createContainerService("testcluster", "1.6.9", 1, 1)
+
+		cs.Properties.OrchestratorProfile.OrchestratorVersion = "1.7.14"
+		cs.Properties.AgentPoolProfiles[0].AvailabilityProfile = "VirtualMachineScaleSets"
+		uc := UpgradeCluster{
+			Translator: &i18n.Translator{},
+			Logger:     log.NewEntry(log.New()),
+		}
+
+		mockClient := armhelpers.MockACSEngineClient{}
+		mockClient.FailListVirtualMachineScaleSets = true
+		uc.Client = &mockClient
+
+		subID, _ := uuid.FromString("DEC923E3-1EF1-4745-9516-37906D56DEC4")
+
+		err := uc.UpgradeCluster(subID, "kubeConfig", "TestRg", cs, "12345678", []string{"agentpool1"}, TestACSEngineVersion)
+		Expect(err).NotTo(BeNil())
+		Expect(err.Error()).To(Equal("Error while querying ARM for resources: ListVirtualMachines failed"))
+	})
+
+	It("Should return error message when failing to scale VMs in a VMSS", func() {
+		cs := createContainerService("testcluster", "1.6.9", 1, 1)
+
+		cs.Properties.OrchestratorProfile.OrchestratorVersion = "1.7.14"
+		cs.Properties.AgentPoolProfiles[0].AvailabilityProfile = "VirtualMachineScaleSets"
+		cs.Properties.AgentPoolProfiles[0].StorageProfile = "ManagedDisks"
+		uc := UpgradeCluster{
+			Translator: &i18n.Translator{},
+			Logger:     log.NewEntry(log.New()),
+		}
+
+		mockClient := armhelpers.MockACSEngineClient{}
+		mockClient.FailSetVirtualMachineScaleSetCapacity = true
+		uc.Client = &mockClient
+
+		subID, _ := uuid.FromString("DEC923E3-1EF1-4745-9516-37906D56DEC4")
+
+		err := uc.UpgradeCluster(subID, "kubeConfig", "TestRg", cs, "12345678", []string{"agentpool1"}, TestACSEngineVersion)
+		Expect(err).NotTo(BeNil())
+		// Expect(err.Error()).To(Equal("Error while querying ARM for resources: ListVirtualMachines failed"))
+	})
 })
 
 func createContainerService(containerServiceName string, orchestratorVersion string, masterCount int, agentCount int) *api.ContainerService {
